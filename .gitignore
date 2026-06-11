@@ -1,0 +1,5 @@
+node_modules/
+leads.json
+.env
+.env.local
+*.tmp

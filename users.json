@@ -1,0 +1,8 @@
+{
+  "users": [
+    { "id": 1, "username": "admin",     "password": "admin123",     "nome": "Administrador",        "cidade": null,                   "role": "admin" },
+    { "id": 2, "username": "santafe",   "password": "santafe123",   "nome": "Santa Fé do Sul",      "cidade": "Santa Fé do Sul",      "role": "user"  },
+    { "id": 3, "username": "taboado",   "password": "taboado123",   "nome": "Aparecida do Taboado", "cidade": "Aparecida do Taboado", "role": "user"  },
+    { "id": 4, "username": "paranaiba", "password": "paranaiba123", "nome": "Paranaíba",             "cidade": "Paranaíba",            "role": "user"  }
+  ]
+}

@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CRM Macrocaptação — Cursos Via Certa</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    [x-cloak] { display: none !important; }
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: #f1f5f9; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 99px; }
+    .fade-in { animation: fadeIn 0.15s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  </style>
+</head>
+<body class="bg-slate-50 min-h-screen" x-data="app()" x-init="init()">
+
+  <!-- ══════════════════════════════════════════════════════ LOGIN ══ -->
+  <div x-cloak x-show="!auth.token" class="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-slate-900 to-slate-800">
+    <div class="w-full max-w-sm">
+      <!-- Logo -->
+      <div class="text-center mb-8">
+        <div class="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-blue-900/40">
+          <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+          </svg>
+        </div>
+        <h1 class="text-white font-bold text-xl">CRM Macrocaptação</h1>
+        <p class="text-slate-400 text-sm mt-1">Cursos Via Certa</p>
+      </div>
+
+      <!-- Form -->
+      <div class="bg-white rounded-2xl shadow-2xl p-6">
+        <form @submit.prevent="login()">
+          <div class="space-y-4">
+            <div>
+              <label class="block text-xs font-medium text-slate-700 mb-1.5">Usuário</label>
+              <input x-model="loginForm.username" type="text" required autocomplete="username"
+                class="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Ex: santafe">
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-700 mb-1.5">Senha</label>
+              <input x-model="loginForm.password" type="password" required autocomplete="current-password"
+                class="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="••••••••">
+            </div>
+            <p x-show="loginError" x-text="loginError" class="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg"></p>
+            <button type="submit" :disabled="loginLoading"
+              class="w-full py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              x-text="loginLoading ? 'Entrando...' : 'Entrar'">
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════ CRM ══ -->
+  <div x-cloak x-show="auth.token">
+
+    <!-- ── HEADER ── -->
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-xl flex items-center justify-center shadow-sm shrink-0"
+               :class="auth.user?.cidade ? cidadeBadge(auth.user.cidade).headerBg : 'bg-blue-600'">
+            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+            </svg>
+          </div>
+          <div>
+            <h1 class="font-semibold text-slate-900 text-sm leading-tight">CRM Macrocaptação</h1>
+            <p class="text-xs text-slate-400" x-text="auth.user?.cidade || 'Todas as cidades'"></p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <button @click="openModal('add')"
+            class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-medium flex items-center gap-1.5 transition-colors shadow-sm">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+            </svg>
+            <span class="hidden sm:inline">Novo Lead</span>
+            <span class="sm:hidden">Novo</span>
+          </button>
+          <button @click="logout()" title="Sair"
+            class="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-5 space-y-4">
+
+      <!-- ── CIDADE TABS (admin only) ── -->
+      <div x-show="isAdmin()" class="grid grid-cols-4 gap-3">
+        <button @click="filterCidade = ''; loadLeads(); loadStats()"
+          :class="filterCidade === '' ? 'ring-2 ring-slate-400 bg-slate-800 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'"
+          class="rounded-2xl p-4 border border-slate-100 shadow-sm text-left transition-all">
+          <p class="text-xs font-semibold uppercase tracking-wide opacity-70">Todas</p>
+          <p class="text-2xl font-bold mt-0.5" x-text="statsGlobal.total ?? 0"></p>
+          <p class="text-xs mt-0.5 opacity-60" x-text="`${statsGlobal.matriculado ?? 0} matrículas`"></p>
+        </button>
+        <button @click="filterCidade = 'Santa Fé do Sul'; loadLeads(); loadStats()"
+          :class="filterCidade === 'Santa Fé do Sul' ? 'ring-2 ring-indigo-400 bg-indigo-600 text-white' : 'bg-white text-slate-700 hover:bg-indigo-50'"
+          class="rounded-2xl p-4 border border-slate-100 shadow-sm text-left transition-all">
+          <p class="text-xs font-semibold uppercase tracking-wide opacity-70">Santa Fé do Sul</p>
+          <p class="text-2xl font-bold mt-0.5" x-text="statsCidades['Santa Fé do Sul']?.total ?? 0"></p>
+          <p class="text-xs mt-0.5 opacity-60" x-text="`${statsCidades['Santa Fé do Sul']?.matriculado ?? 0} matrículas`"></p>
+        </button>
+        <button @click="filterCidade = 'Aparecida do Taboado'; loadLeads(); loadStats()"
+          :class="filterCidade === 'Aparecida do Taboado' ? 'ring-2 ring-teal-400 bg-teal-600 text-white' : 'bg-white text-slate-700 hover:bg-teal-50'"
+          class="rounded-2xl p-4 border border-slate-100 shadow-sm text-left transition-all">
+          <p class="text-xs font-semibold uppercase tracking-wide opacity-70">Ap. do Taboado</p>
+          <p class="text-2xl font-bold mt-0.5" x-text="statsCidades['Aparecida do Taboado']?.total ?? 0"></p>
+          <p class="text-xs mt-0.5 opacity-60" x-text="`${statsCidades['Aparecida do Taboado']?.matriculado ?? 0} matrículas`"></p>
+        </button>
+        <button @click="filterCidade = 'Paranaíba'; loadLeads(); loadStats()"
+          :class="filterCidade === 'Paranaíba' ? 'ring-2 ring-violet-400 bg-violet-600 text-white' : 'bg-white text-slate-700 hover:bg-violet-50'"
+          class="rounded-2xl p-4 border border-slate-100 shadow-sm text-left transition-all">
+          <p class="text-xs font-semibold uppercase tracking-wide opacity-70">Paranaíba</p>
+          <p class="text-2xl font-bold mt-0.5" x-text="statsCidades['Paranaíba']?.total ?? 0"></p>
+          <p class="text-xs mt-0.5 opacity-60" x-text="`${statsCidades['Paranaíba']?.matriculado ?? 0} matrículas`"></p>
+        </button>
+      </div>
+
+      <!-- ── BANNER cidade do usuário (não-admin) ── -->
+      <div x-show="!isAdmin()" class="rounded-2xl p-4 text-white shadow-sm"
+           :class="cidadeBadge(auth.user?.cidade).headerBg">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-xs font-semibold uppercase tracking-wide opacity-75">Sua unidade</p>
+            <p class="text-xl font-bold mt-0.5" x-text="auth.user?.cidade"></p>
+          </div>
+          <div class="text-right">
+            <p class="text-3xl font-bold" x-text="stats.total ?? 0"></p>
+            <p class="text-xs opacity-75">leads no total</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── STATS ── -->
+      <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        <div class="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
+          <p class="text-xs text-slate-400 font-medium">Sem contato</p>
+          <p class="text-2xl font-bold text-orange-500 mt-0.5" x-text="stats.novo ?? 0"></p>
+        </div>
+        <div class="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
+          <p class="text-xs text-slate-400 font-medium">Em contato</p>
+          <p class="text-2xl font-bold text-blue-500 mt-0.5" x-text="stats.em_contato ?? 0"></p>
+        </div>
+        <div class="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
+          <p class="text-xs text-slate-400 font-medium">Agendados</p>
+          <p class="text-2xl font-bold text-amber-500 mt-0.5" x-text="stats.agendado ?? 0"></p>
+          <p class="text-xs text-slate-300 mt-0.5" x-text="`${stats.taxa_agendamento ?? 0}%`"></p>
+        </div>
+        <div class="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
+          <p class="text-xs text-slate-400 font-medium">Matrículas</p>
+          <p class="text-2xl font-bold text-green-600 mt-0.5" x-text="stats.matriculado ?? 0"></p>
+          <p class="text-xs text-slate-300 mt-0.5" x-text="`${stats.taxa_conversao ?? 0}% conversão`"></p>
+        </div>
+        <div class="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
+          <p class="text-xs text-slate-400 font-medium">Não atendeu</p>
+          <p class="text-2xl font-bold text-red-400 mt-0.5" x-text="(stats.nao_atendeu ?? 0) + (stats.nao_compareceu ?? 0)"></p>
+        </div>
+      </div>
+
+      <!-- ── FILTROS ── -->
+      <div class="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+        <div class="flex flex-wrap gap-1.5 p-3 border-b border-slate-100">
+          <template x-for="tab in statusTabs" :key="tab.value">
+            <button @click="filterStatus = tab.value; loadLeads()"
+              :class="filterStatus === tab.value ? 'bg-blue-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'"
+              class="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap"
+              x-text="tab.label">
+            </button>
+          </template>
+        </div>
+        <div class="flex flex-wrap gap-3 p-3 items-center">
+          <div class="flex-1 min-w-48 relative">
+            <svg class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0"/>
+            </svg>
+            <input x-model="searchQuery" @input.debounce.300ms="loadLeads()" type="search"
+              placeholder="Buscar por nome, telefone ou curso..."
+              class="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+          </div>
+          <span class="text-xs text-slate-400 whitespace-nowrap" x-text="`${leads.length} lead${leads.length !== 1 ? 's' : ''}`"></span>
+        </div>
+      </div>
+
+      <!-- ── TABELA ── -->
+      <div class="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+        <div x-show="loading" class="py-20 text-center">
+          <div class="animate-spin w-7 h-7 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-3"></div>
+          <p class="text-sm text-slate-400">Carregando leads...</p>
+        </div>
+
+        <div x-show="!loading && leads.length === 0" class="py-20 text-center">
+          <div class="w-14 h-14 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <svg class="w-7 h-7 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
+            </svg>
+          </div>
+          <p class="font-medium text-slate-600">Nenhum lead encontrado</p>
+          <p class="text-sm text-slate-400 mt-1">Mude o filtro ou adicione um novo lead</p>
+        </div>
+
+        <div x-show="!loading && leads.length > 0" class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="bg-slate-50 border-b border-slate-100">
+                <th class="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wide w-10">#</th>
+                <th class="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wide">Nome</th>
+                <th class="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wide hidden md:table-cell">Telefone</th>
+                <th class="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wide hidden lg:table-cell">Curso</th>
+                <th x-show="isAdmin()" class="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wide hidden sm:table-cell">Cidade</th>
+                <th class="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wide hidden sm:table-cell w-24">Data</th>
+                <th class="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wide">Status</th>
+                <th class="text-right px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wide">Ações</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-50">
+              <template x-for="lead in leads" :key="lead.id">
+                <tr class="hover:bg-slate-50/80 cursor-pointer transition-colors group fade-in" @click="openModal('view', lead)">
+                  <td class="px-4 py-3.5 text-slate-300 text-xs font-mono" x-text="lead.id"></td>
+                  <td class="px-4 py-3.5">
+                    <p class="font-medium text-slate-900" x-text="lead.nome"></p>
+                    <p class="text-xs text-slate-400 mt-0.5 md:hidden" x-text="lead.telefone || ''"></p>
+                  </td>
+                  <td class="px-4 py-3.5 text-slate-600 hidden md:table-cell" x-text="lead.telefone || '—'"></td>
+                  <td class="px-4 py-3.5 text-slate-600 hidden lg:table-cell">
+                    <span class="inline-block max-w-36 truncate" x-text="lead.curso_interesse || '—'"></span>
+                  </td>
+                  <td x-show="isAdmin()" class="px-4 py-3.5 hidden sm:table-cell">
+                    <span x-show="lead.unidade"
+                      :class="cidadeBadge(lead.unidade).cls"
+                      class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap"
+                      x-text="lead.unidade">
+                    </span>
+                    <span x-show="!lead.unidade" class="text-slate-300">—</span>
+                  </td>
+                  <td class="px-4 py-3.5 text-xs text-slate-500 hidden sm:table-cell" x-text="formatDate(lead.data_captacao)"></td>
+                  <td class="px-4 py-3.5">
+                    <span :class="badge(lead.status).cls"
+                      class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap">
+                      <span x-text="badge(lead.status).icon"></span>
+                      <span x-text="badge(lead.status).label"></span>
+                    </span>
+                    <p x-show="lead.agendado_data" class="text-xs text-amber-600 mt-0.5 font-medium"
+                       x-text="lead.agendado_data ? `📅 ${fmtAgend(lead.agendado_data, lead.agendado_hora)}` : ''"></p>
+                  </td>
+                  <td class="px-4 py-3.5" @click.stop>
+                    <div class="flex items-center justify-end gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
+                      <button @click="quickStatus(lead, 'em_contato')" x-show="lead.status === 'novo'"
+                        title="Ligou" class="p-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 8V5z"/>
+                        </svg>
+                      </button>
+                      <button @click="openModal('schedule', lead)"
+                        x-show="['novo','em_contato','nao_atendeu','nao_compareceu'].includes(lead.status)"
+                        title="Agendar" class="p-1.5 rounded-lg bg-amber-50 text-amber-600 hover:bg-amber-100 transition-colors">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                        </svg>
+                      </button>
+                      <button @click="quickStatus(lead, 'nao_atendeu')"
+                        x-show="['novo','em_contato'].includes(lead.status)"
+                        title="Não atendeu" class="p-1.5 rounded-lg bg-orange-50 text-orange-500 hover:bg-orange-100 transition-colors">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+                        </svg>
+                      </button>
+                      <button @click="quickStatus(lead, 'matriculado')"
+                        x-show="!['matriculado','desistiu'].includes(lead.status)"
+                        title="Matriculou!" class="p-1.5 rounded-lg bg-green-50 text-green-600 hover:bg-green-100 transition-colors">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                      </button>
+                      <button @click="openModal('edit', lead)" title="Editar"
+                        class="p-1.5 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
+                        </svg>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div><!-- /crm -->
+
+  <!-- ══════════════════════════════════════════════════ MODAIS ══ -->
+  <div x-cloak x-show="modal.open"
+    x-transition:enter="transition ease-out duration-150" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100"
+    x-transition:leave="transition ease-in duration-100" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0"
+    @click.self="closeModal()"
+    class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center sm:p-4">
+
+    <!-- ADD / EDIT -->
+    <div x-cloak x-show="['add','edit'].includes(modal.type)"
+      x-transition:enter="transition ease-out duration-150" x-transition:enter-start="opacity-0 translate-y-4" x-transition:enter-end="opacity-100 translate-y-0"
+      @click.stop class="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl w-full sm:max-w-lg max-h-[92vh] flex flex-col">
+      <div class="p-5 border-b border-slate-100 flex items-center justify-between shrink-0">
+        <h2 class="font-semibold text-slate-900" x-text="modal.type === 'add' ? 'Novo Lead' : 'Editar Lead'"></h2>
+        <button @click="closeModal()" class="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+          <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+      <form @submit.prevent="saveLead()" class="p-5 space-y-4 overflow-y-auto">
+        <div class="grid grid-cols-2 gap-4">
+
+          <!-- Cidade (admin vê; usuário de cidade não vê) -->
+          <div x-show="isAdmin()" class="col-span-2">
+            <label class="block text-xs font-medium text-slate-700 mb-2">Cidade *</label>
+            <div class="grid grid-cols-3 gap-2">
+              <template x-for="c in cidades" :key="c">
+                <button type="button" @click="form.unidade = c"
+                  :class="form.unidade === c ? cidadeBadge(c).selectedCls : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'"
+                  class="px-3 py-2.5 rounded-xl border text-xs font-semibold transition-all text-center" x-text="c">
+                </button>
+              </template>
+            </div>
+          </div>
+          <!-- Cidade fixa para usuário de cidade -->
+          <div x-show="!isAdmin()" class="col-span-2">
+            <p class="text-xs font-medium text-slate-400 mb-1">Cidade</p>
+            <span :class="cidadeBadge(auth.user?.cidade).cls"
+              class="inline-flex items-center px-3 py-1.5 rounded-xl text-sm font-semibold"
+              x-text="auth.user?.cidade">
+            </span>
+          </div>
+
+          <div class="col-span-2">
+            <label class="block text-xs font-medium text-slate-700 mb-1.5">Nome completo *</label>
+            <input x-model="form.nome" type="text" required autocomplete="off"
+              class="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="Ex: Maria Santos">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1.5">Telefone / WhatsApp</label>
+            <input x-model="form.telefone" type="tel" autocomplete="off"
+              class="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="(67) 99999-9999">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1.5">Curso de interesse</label>
+            <input x-model="form.curso_interesse" type="text" list="cursos-list" autocomplete="off"
+              class="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="Ex: Administração">
+            <datalist id="cursos-list">
+              <template x-for="c in cursos" :key="c"><option :value="c"></option></template>
+            </datalist>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1.5">Data</label>
+            <input x-model="form.data_captacao" type="date"
+              class="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1.5">Hora</label>
+            <input x-model="form.hora_captacao" type="time"
+              class="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1.5">Vendedora</label>
+            <input x-model="form.vendedora" type="text" autocomplete="off"
+              class="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="Nome da vendedora">
+          </div>
+          <div x-show="modal.type === 'edit'">
+            <label class="block text-xs font-medium text-slate-700 mb-1.5">Status</label>
+            <select x-model="form.status"
+              class="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white">
+              <template x-for="s in statusOptions" :key="s.value">
+                <option :value="s.value" x-text="s.label"></option>
+              </template>
+            </select>
+          </div>
+          <div class="col-span-2">
+            <label class="block text-xs font-medium text-slate-700 mb-1.5">Observações</label>
+            <textarea x-model="form.obs" rows="2"
+              class="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+              placeholder="Qualquer observação relevante..."></textarea>
+          </div>
+        </div>
+        <div class="flex gap-3 pt-1">
+          <button type="button" @click="closeModal()"
+            class="flex-1 px-4 py-2.5 border border-slate-200 text-slate-600 rounded-xl text-sm font-medium hover:bg-slate-50 transition-colors">Cancelar</button>
+          <button type="submit" :disabled="saving || (isAdmin() && !form.unidade)"
+            class="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+            x-text="saving ? 'Salvando...' : (modal.type === 'add' ? 'Adicionar Lead' : 'Salvar')">
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- AGENDAR -->
+    <div x-cloak x-show="modal.type === 'schedule'"
+      x-transition:enter="transition ease-out duration-150" x-transition:enter-start="opacity-0 translate-y-4" x-transition:enter-end="opacity-100 translate-y-0"
+      @click.stop class="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl w-full sm:max-w-sm">
+      <div class="p-5 border-b border-slate-100 flex items-center justify-between">
+        <div>
+          <h2 class="font-semibold text-slate-900">Agendar Visita</h2>
+          <p class="text-sm text-slate-500 mt-0.5" x-text="modal.lead?.nome ?? ''"></p>
+        </div>
+        <button @click="closeModal()" class="p-2 hover:bg-slate-100 rounded-xl transition-colors">
+          <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+      <div class="p-5 space-y-4">
+        <div>
+          <label class="block text-xs font-medium text-slate-700 mb-1.5">Data *</label>
+          <input x-model="scheduleForm.data" type="date"
+            class="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-700 mb-1.5">Horário</label>
+          <input x-model="scheduleForm.hora" type="time"
+            class="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-700 mb-1.5">Observação</label>
+          <input x-model="scheduleForm.obs" type="text"
+            class="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            placeholder="Ex: Vai trazer documentos">
+        </div>
+        <div class="flex gap-3 pt-1">
+          <button @click="closeModal()" class="flex-1 px-4 py-2.5 border border-slate-200 text-slate-600 rounded-xl text-sm font-medium hover:bg-slate-50 transition-colors">Cancelar</button>
+          <button @click="saveSchedule()" :disabled="!scheduleForm.data || saving"
+            class="flex-1 px-4 py-2.5 bg-amber-500 text-white rounded-xl text-sm font-medium hover:bg-amber-600 disabled:opacity-50 transition-colors"
+            x-text="saving ? 'Salvando...' : 'Confirmar'">
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- VER LEAD -->
+    <div x-cloak x-show="modal.type === 'view'"
+      x-transition:enter="transition ease-out duration-150" x-transition:enter-start="opacity-0 translate-y-4" x-transition:enter-end="opacity-100 translate-y-0"
+      @click.stop class="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl w-full sm:max-w-lg max-h-[92vh] flex flex-col">
+      <div class="p-5 border-b border-slate-100 flex items-start justify-between shrink-0">
+        <div>
+          <h2 class="font-semibold text-slate-900 text-lg" x-text="modal.lead?.nome ?? ''"></h2>
+          <div class="flex items-center gap-2 mt-1.5 flex-wrap">
+            <span :class="badge(modal.lead?.status).cls"
+              class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium">
+              <span x-text="badge(modal.lead?.status).icon"></span>
+              <span x-text="badge(modal.lead?.status).label"></span>
+            </span>
+            <span x-show="modal.lead?.unidade && isAdmin()"
+              :class="cidadeBadge(modal.lead?.unidade).cls"
+              class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium"
+              x-text="modal.lead?.unidade">
+            </span>
+          </div>
+        </div>
+        <button @click="closeModal()" class="p-2 hover:bg-slate-100 rounded-xl transition-colors shrink-0">
+          <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+      <div class="p-5 overflow-y-auto space-y-5">
+        <div class="grid grid-cols-2 gap-x-6 gap-y-4 text-sm">
+          <div>
+            <p class="text-xs font-medium text-slate-400 uppercase tracking-wide mb-0.5">Telefone</p>
+            <p class="text-slate-800 font-medium" x-text="modal.lead?.telefone || '—'"></p>
+          </div>
+          <div>
+            <p class="text-xs font-medium text-slate-400 uppercase tracking-wide mb-0.5">Curso</p>
+            <p class="text-slate-700" x-text="modal.lead?.curso_interesse || '—'"></p>
+          </div>
+          <div>
+            <p class="text-xs font-medium text-slate-400 uppercase tracking-wide mb-0.5">Captação</p>
+            <p class="text-slate-700" x-text="modal.lead?.data_captacao ? `${formatDate(modal.lead.data_captacao)} ${modal.lead.hora_captacao || ''}`.trim() : '—'"></p>
+          </div>
+          <div>
+            <p class="text-xs font-medium text-slate-400 uppercase tracking-wide mb-0.5">Vendedora</p>
+            <p class="text-slate-700" x-text="modal.lead?.vendedora || '—'"></p>
+          </div>
+          <div x-show="modal.lead?.agendado_data" class="col-span-2">
+            <p class="text-xs font-medium text-slate-400 uppercase tracking-wide mb-0.5">Agendado para</p>
+            <p class="text-amber-600 font-semibold text-base" x-text="modal.lead?.agendado_data ? fmtAgend(modal.lead.agendado_data, modal.lead.agendado_hora) : ''"></p>
+          </div>
+          <div x-show="modal.lead?.obs" class="col-span-2">
+            <p class="text-xs font-medium text-slate-400 uppercase tracking-wide mb-1">Observações</p>
+            <p class="text-slate-700 bg-slate-50 rounded-xl p-3 text-sm leading-relaxed" x-text="modal.lead?.obs"></p>
+          </div>
+        </div>
+
+        <div class="border-t border-slate-100 pt-4">
+          <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Atualizar status</p>
+          <div class="flex flex-wrap gap-2">
+            <button @click="quickStatus(modal.lead, 'em_contato'); refreshView(modal.lead.id)"
+              x-show="['novo'].includes(modal.lead?.status)"
+              class="px-3 py-2 bg-blue-50 text-blue-700 rounded-xl text-xs font-medium hover:bg-blue-100 transition-colors">📞 Ligou</button>
+            <button @click="closeModal(); $nextTick(() => openModal('schedule', modal.lead))"
+              x-show="['novo','em_contato','nao_atendeu','nao_compareceu'].includes(modal.lead?.status)"
+              class="px-3 py-2 bg-amber-50 text-amber-700 rounded-xl text-xs font-medium hover:bg-amber-100 transition-colors">📅 Agendar</button>
+            <button @click="quickStatus(modal.lead, 'nao_atendeu'); refreshView(modal.lead.id)"
+              x-show="['novo','em_contato'].includes(modal.lead?.status)"
+              class="px-3 py-2 bg-orange-50 text-orange-700 rounded-xl text-xs font-medium hover:bg-orange-100 transition-colors">📵 Não Atendeu</button>
+            <button @click="quickStatus(modal.lead, 'nao_compareceu'); refreshView(modal.lead.id)"
+              x-show="['agendado'].includes(modal.lead?.status)"
+              class="px-3 py-2 bg-red-50 text-red-700 rounded-xl text-xs font-medium hover:bg-red-100 transition-colors">❌ Não Compareceu</button>
+            <button @click="quickStatus(modal.lead, 'matriculado'); refreshView(modal.lead.id)"
+              x-show="!['matriculado','desistiu'].includes(modal.lead?.status)"
+              class="px-3 py-2 bg-green-50 text-green-700 rounded-xl text-xs font-medium hover:bg-green-100 transition-colors">✅ Matriculou!</button>
+            <button @click="quickStatus(modal.lead, 'desistiu'); refreshView(modal.lead.id)"
+              x-show="!['matriculado','desistiu'].includes(modal.lead?.status)"
+              class="px-3 py-2 bg-slate-100 text-slate-600 rounded-xl text-xs font-medium hover:bg-slate-200 transition-colors">🚫 Desistiu</button>
+          </div>
+        </div>
+
+        <div x-show="modal.lead?.historico?.length > 0" class="border-t border-slate-100 pt-4">
+          <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Histórico</p>
+          <div class="space-y-2">
+            <template x-for="h in (modal.lead?.historico ?? [])" :key="h.id">
+              <div class="flex items-start gap-2.5 text-xs">
+                <div class="w-1.5 h-1.5 rounded-full bg-slate-200 mt-1.5 shrink-0"></div>
+                <div class="flex-1">
+                  <span class="text-slate-600" x-text="h.descricao"></span>
+                  <span x-show="h.vendedora" class="text-slate-400 ml-1" x-text="`(${h.vendedora})`"></span>
+                  <span class="text-slate-300 ml-2" x-text="formatDateTime(h.criado_em)"></span>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <div class="border-t border-slate-100 pt-4 flex items-center justify-between">
+          <button x-show="isAdmin()" @click="confirmDelete(modal.lead)"
+            class="text-xs text-red-500 hover:text-red-700 hover:bg-red-50 px-3 py-2 rounded-xl transition-colors font-medium">
+            Excluir lead
+          </button>
+          <div x-show="!isAdmin()"></div>
+          <button @click="openModal('edit', modal.lead)"
+            class="px-4 py-2 bg-slate-900 text-white text-sm font-medium rounded-xl hover:bg-slate-700 transition-colors">
+            Editar
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /backdrop -->
+
+<script>
+function app() {
+  return {
+    auth: { token: null, user: null },
+    loginForm: { username: '', password: '' },
+    loginError: '',
+    loginLoading: false,
+
+    leads: [],
+    stats: {},
+    statsGlobal: {},
+    statsCidades: {},
+    cidades: [],
+    cursos: [],
+    loading: false,
+    saving: false,
+    filterStatus: 'todos',
+    filterCidade: '',
+    searchQuery: '',
+    modal: { open: false, type: null, lead: null },
+    form: {},
+    scheduleForm: { data: '', hora: '', obs: '' },
+
+    statusTabs: [
+      { value: 'todos',         label: 'Todos' },
+      { value: 'novo',          label: '🆕 Novos' },
+      { value: 'em_contato',    label: '📞 Em Contato' },
+      { value: 'agendado',      label: '📅 Agendados' },
+      { value: 'nao_atendeu',   label: '📵 Não Atendeu' },
+      { value: 'nao_compareceu',label: '❌ Não Compareceu' },
+      { value: 'matriculado',   label: '✅ Matriculados' },
+      { value: 'desistiu',      label: '🚫 Desistiram' },
+    ],
+
+    statusOptions: [
+      { value: 'novo',          label: '🆕 Novo' },
+      { value: 'em_contato',    label: '📞 Em Contato' },
+      { value: 'agendado',      label: '📅 Agendado' },
+      { value: 'nao_atendeu',   label: '📵 Não Atendeu' },
+      { value: 'nao_compareceu',label: '❌ Não Compareceu' },
+      { value: 'matriculado',   label: '✅ Matriculado' },
+      { value: 'desistiu',      label: '🚫 Desistiu' },
+    ],
+
+    isAdmin() { return this.auth.user?.role === 'admin'; },
+
+    badge(status) {
+      const m = {
+        novo:           { label: 'Novo',           icon: '🆕', cls: 'bg-slate-100 text-slate-600' },
+        em_contato:     { label: 'Em Contato',     icon: '📞', cls: 'bg-blue-100 text-blue-700' },
+        agendado:       { label: 'Agendado',       icon: '📅', cls: 'bg-amber-100 text-amber-700' },
+        nao_atendeu:    { label: 'Não Atendeu',    icon: '📵', cls: 'bg-orange-100 text-orange-700' },
+        nao_compareceu: { label: 'Não Compareceu', icon: '❌', cls: 'bg-red-100 text-red-700' },
+        matriculado:    { label: 'Matriculado',    icon: '✅', cls: 'bg-green-100 text-green-700' },
+        desistiu:       { label: 'Desistiu',       icon: '🚫', cls: 'bg-gray-100 text-gray-500' },
+      };
+      return m[status] ?? { label: status ?? '—', icon: '•', cls: 'bg-gray-100 text-gray-500' };
+    },
+
+    cidadeBadge(cidade) {
+      const m = {
+        'Santa Fé do Sul':      { cls: 'bg-indigo-100 text-indigo-700', selectedCls: 'bg-indigo-600 border-indigo-600 text-white', headerBg: 'bg-indigo-600' },
+        'Aparecida do Taboado': { cls: 'bg-teal-100 text-teal-700',    selectedCls: 'bg-teal-600 border-teal-600 text-white',     headerBg: 'bg-teal-600'   },
+        'Paranaíba':            { cls: 'bg-violet-100 text-violet-700', selectedCls: 'bg-violet-600 border-violet-600 text-white', headerBg: 'bg-violet-600' },
+      };
+      return m[cidade] ?? { cls: 'bg-slate-100 text-slate-600', selectedCls: 'bg-slate-600 border-slate-600 text-white', headerBg: 'bg-slate-600' };
+    },
+
+    formatDate(d) {
+      if (!d) return '—';
+      const [y, m, day] = d.split('-');
+      return `${day}/${m}/${y}`;
+    },
+
+    fmtAgend(data, hora) {
+      if (!data) return '';
+      const [y, m, d] = data.split('-');
+      return hora ? `${d}/${m} às ${hora}` : `${d}/${m}`;
+    },
+
+    formatDateTime(dt) {
+      if (!dt) return '';
+      try { return new Date(dt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); }
+      catch { return dt; }
+    },
+
+    // ── Auth ──────────────────────────────────────────────────────────────
+
+    async init() {
+      const saved = localStorage.getItem('crm_auth');
+      if (saved) {
+        try {
+          this.auth = JSON.parse(saved);
+          // Verifica se o token ainda é válido
+          const r = await fetch('/api/me', { headers: { Authorization: `Bearer ${this.auth.token}` } });
+          if (!r.ok) { this.auth = { token: null, user: null }; localStorage.removeItem('crm_auth'); return; }
+          this.auth.user = await r.json();
+          await this.loadApp();
+        } catch { this.auth = { token: null, user: null }; localStorage.removeItem('crm_auth'); }
+      }
+    },
+
+    async login() {
+      this.loginLoading = true;
+      this.loginError = '';
+      const r = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(this.loginForm),
+      });
+      const data = await r.json();
+      this.loginLoading = false;
+      if (!r.ok) { this.loginError = data.error || 'Erro ao entrar'; return; }
+      this.auth = { token: data.token, user: data.user };
+      localStorage.setItem('crm_auth', JSON.stringify(this.auth));
+      this.loginForm = { username: '', password: '' };
+      await this.loadApp();
+    },
+
+    async logout() {
+      await this.api('/api/logout', { method: 'POST' });
+      this.auth = { token: null, user: null };
+      localStorage.removeItem('crm_auth');
+      this.leads = [];
+      this.stats = {};
+    },
+
+    // ── API helper ────────────────────────────────────────────────────────
+
+    async api(url, options = {}) {
+      const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+      if (this.auth.token) headers['Authorization'] = `Bearer ${this.auth.token}`;
+      const r = await fetch(url, { ...options, headers });
+      if (r.status === 401) { this.logout(); return null; }
+      return r;
+    },
+
+    // ── Load app after login ───────────────────────────────────────────────
+
+    async loadApp() {
+      const [cidades, cursos] = await Promise.all([
+        this.api('/api/cidades').then(r => r?.json() ?? []),
+        this.api('/api/cursos').then(r => r?.json() ?? []),
+      ]);
+      this.cidades = cidades;
+      this.cursos = cursos;
+      await Promise.all([this.loadLeads(), this.loadStats(), this.isAdmin() ? this.loadAllStats() : Promise.resolve()]);
+    },
+
+    async loadLeads() {
+      this.loading = true;
+      const p = new URLSearchParams();
+      if (this.filterStatus !== 'todos') p.set('status', this.filterStatus);
+      if (this.filterCidade && this.isAdmin()) p.set('unidade', this.filterCidade);
+      if (this.searchQuery) p.set('search', this.searchQuery);
+      const r = await this.api(`/api/leads?${p}`);
+      this.leads = r ? await r.json() : [];
+      this.loading = false;
+    },
+
+    async loadStats() {
+      const cidade = this.isAdmin() ? this.filterCidade : '';
+      const p = cidade ? `?unidade=${encodeURIComponent(cidade)}` : '';
+      const r = await this.api(`/api/stats${p}`);
+      this.stats = r ? await r.json() : {};
+    },
+
+    async loadAllStats() {
+      const CIDADES = ['Santa Fé do Sul', 'Aparecida do Taboado', 'Paranaíba'];
+      const [global, ...porCidade] = await Promise.all([
+        this.api('/api/stats').then(r => r?.json() ?? {}),
+        ...CIDADES.map(c => this.api(`/api/stats?unidade=${encodeURIComponent(c)}`).then(r => r?.json() ?? {}).then(s => ({ cidade: c, ...s }))),
+      ]);
+      this.statsGlobal = global;
+      this.statsCidades = {};
+      for (const s of porCidade) this.statsCidades[s.cidade] = s;
+    },
+
+    // ── Modais ────────────────────────────────────────────────────────────
+
+    openModal(type, lead = null) {
+      if (type === 'add') {
+        const hoje = new Date().toISOString().split('T')[0];
+        const agora = new Date().toTimeString().slice(0, 5);
+        this.form = {
+          data_captacao: hoje, hora_captacao: agora, status: 'novo',
+          unidade: this.auth.user?.cidade || (this.filterCidade || ''),
+        };
+      } else if (type === 'edit') {
+        this.form = { ...lead };
+      } else if (type === 'schedule') {
+        this.scheduleForm = { data: '', hora: '', obs: '' };
+      } else if (type === 'view') {
+        this.loadLeadFull(lead.id);
+      }
+      this.modal = { open: true, type, lead };
+    },
+
+    closeModal() { this.modal = { open: false, type: null, lead: null }; },
+
+    async loadLeadFull(id) {
+      const r = await this.api(`/api/leads/${id}`);
+      if (r) this.modal.lead = await r.json();
+    },
+
+    async refreshView(id) {
+      await Promise.all([this.loadLeads(), this.loadStats(), this.isAdmin() ? this.loadAllStats() : Promise.resolve()]);
+      if (this.modal.open && this.modal.type === 'view') this.loadLeadFull(id);
+    },
+
+    async saveLead() {
+      if (this.isAdmin() && !this.form.unidade) return;
+      this.saving = true;
+      const isAdd = this.modal.type === 'add';
+      const r = await this.api(isAdd ? '/api/leads' : `/api/leads/${this.form.id}`, {
+        method: isAdd ? 'POST' : 'PUT',
+        body: JSON.stringify(this.form),
+      });
+      this.saving = false;
+      if (!r?.ok) return;
+      this.closeModal();
+      const cursos = await this.api('/api/cursos').then(r => r?.json() ?? []);
+      this.cursos = cursos;
+      await Promise.all([this.loadLeads(), this.loadStats(), this.isAdmin() ? this.loadAllStats() : Promise.resolve()]);
+    },
+
+    async saveSchedule() {
+      if (!this.scheduleForm.data) return;
+      this.saving = true;
+      const body = { status: 'agendado', agendado_data: this.scheduleForm.data, agendado_hora: this.scheduleForm.hora || null };
+      if (this.scheduleForm.obs) body.obs = [this.modal.lead?.obs, this.scheduleForm.obs].filter(Boolean).join('\n');
+      await this.api(`/api/leads/${this.modal.lead.id}`, { method: 'PUT', body: JSON.stringify(body) });
+      this.saving = false;
+      this.closeModal();
+      await Promise.all([this.loadLeads(), this.loadStats(), this.isAdmin() ? this.loadAllStats() : Promise.resolve()]);
+    },
+
+    async quickStatus(lead, newStatus) {
+      await this.api(`/api/leads/${lead.id}`, { method: 'PUT', body: JSON.stringify({ status: newStatus }) });
+      await Promise.all([this.loadLeads(), this.loadStats(), this.isAdmin() ? this.loadAllStats() : Promise.resolve()]);
+    },
+
+    async confirmDelete(lead) {
+      if (!confirm(`Excluir "${lead.nome}"? Não dá pra desfazer.`)) return;
+      await this.api(`/api/leads/${lead.id}`, { method: 'DELETE' });
+      this.closeModal();
+      await Promise.all([this.loadLeads(), this.loadStats(), this.isAdmin() ? this.loadAllStats() : Promise.resolve()]);
+    },
+  };
+}
+</script>
+</body>
+</html>

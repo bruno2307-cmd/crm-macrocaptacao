@@ -1,0 +1,15 @@
+{
+  "name": "crm-macrocaptacao",
+  "version": "1.0.0",
+  "description": "CRM de leads de macrocaptação — Cursos Via Certa",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.2",
+    "@neondatabase/serverless": "^0.10.4"
+  }
+}
