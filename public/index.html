@@ -531,14 +531,30 @@
           </div>
         </div>
 
+        <!-- Adicionar observação ao histórico -->
+        <div class="border-t border-slate-100 pt-4">
+          <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Registrar contato</p>
+          <div class="flex gap-2">
+            <textarea x-model="novaObs" rows="2" placeholder="Ex: Liguei às 14h, cliente vai pensar e retorna sexta..."
+              class="flex-1 px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"></textarea>
+            <button @click="addHistorico(modal.lead.id)"
+              :disabled="!novaObs.trim() || savingObs"
+              class="px-3 py-2 bg-blue-600 text-white text-xs font-medium rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed self-end">
+              <span x-text="savingObs ? '...' : 'Salvar'"></span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Histórico -->
         <div x-show="modal.lead?.historico?.length > 0" class="border-t border-slate-100 pt-4">
           <p class="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Histórico</p>
           <div class="space-y-2">
             <template x-for="h in (modal.lead?.historico ?? [])" :key="h.id">
               <div class="flex items-start gap-2.5 text-xs">
-                <div class="w-1.5 h-1.5 rounded-full bg-slate-200 mt-1.5 shrink-0"></div>
+                <div class="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0"
+                  :class="h.acao === 'obs' ? 'bg-blue-300' : 'bg-slate-200'"></div>
                 <div class="flex-1">
-                  <span class="text-slate-600" x-text="h.descricao"></span>
+                  <span :class="h.acao === 'obs' ? 'text-slate-700 font-medium' : 'text-slate-600'" x-text="h.descricao"></span>
                   <span x-show="h.vendedora" class="text-slate-400 ml-1" x-text="`(${h.vendedora})`"></span>
                   <span class="text-slate-300 ml-2" x-text="formatDateTime(h.criado_em)"></span>
                 </div>
@@ -579,6 +595,8 @@ function app() {
     cursos: [],
     loading: false,
     saving: false,
+    novaObs: '',
+    savingObs: false,
     filterStatus: 'todos',
     filterCidade: '',
     searchQuery: '',
@@ -771,6 +789,20 @@ function app() {
     async refreshView(id) {
       await Promise.all([this.loadLeads(), this.loadStats(), this.isAdmin() ? this.loadAllStats() : Promise.resolve()]);
       if (this.modal.open && this.modal.type === 'view') this.loadLeadFull(id);
+    },
+
+    async addHistorico(leadId) {
+      const texto = this.novaObs.trim();
+      if (!texto) return;
+      this.savingObs = true;
+      const r = await this.api(`/api/leads/${leadId}/historico`, {
+        method: 'POST',
+        body: JSON.stringify({ descricao: texto }),
+      });
+      this.savingObs = false;
+      if (!r?.ok) return;
+      this.novaObs = '';
+      await this.loadLeadFull(leadId);
     },
 
     async saveLead() {

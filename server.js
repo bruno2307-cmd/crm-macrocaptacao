@@ -285,6 +285,31 @@ app.get('/api/cidades', auth, (req, res) => {
   res.json(CIDADES);
 });
 
+app.post('/api/leads/:id/historico', auth, async (req, res) => {
+  try {
+    const { descricao } = req.body;
+    if (!descricao?.trim()) return res.status(400).json({ error: 'Descrição obrigatória' });
+    const db = await readDB();
+    const lead = db.leads.find(l => l.id === Number(req.params.id));
+    if (!lead) return res.status(404).json({ error: 'Lead não encontrado' });
+    if (req.user.cidade && lead.unidade !== req.user.cidade) return res.status(403).json({ error: 'Acesso negado' });
+    if (!db.historico) db.historico = [];
+    const entry = {
+      id: nextId(db, 'historico'),
+      lead_id: lead.id,
+      acao: 'obs',
+      descricao: descricao.trim(),
+      vendedora: req.user.nome || req.user.username,
+      criado_em: nowStr(),
+    };
+    db.historico.push(entry);
+    await writeDB(db);
+    res.json(entry);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Export para Vercel / Listen local ─────────────────────────────────────
 
 module.exports = app;
