@@ -3,6 +3,10 @@ const path = require('path');
 const fs = require('fs');
 const jwt = require('jsonwebtoken');
 const { networkInterfaces } = require('os');
+const multer = require('multer');
+const XLSX = require('xlsx');
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -275,6 +279,125 @@ app.get('/api/cursos', auth, async (req, res) => {
     const db = await readDB();
     const base = leadsVisiveis(db.leads, req.user);
     res.json([...new Set(base.map(l => l.curso_interesse).filter(Boolean))].sort());
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Importação de planilha ─────────────────────────────────────────────────
+
+function detectarColunas(header) {
+  const norm = s => s?.toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+  const map = {};
+  for (const col of header) {
+    const n = norm(col);
+    if (/^nome$|^name$|^cliente$/.test(n))                                   map.nome = col;
+    else if (/tel|fone|celular|whats|zap/.test(n))                           map.telefone = col;
+    else if (/curso|interesse|servico|produto/.test(n))                      map.curso_interesse = col;
+    else if (/^data$|data.?cap|data.?entr|data.?lead/.test(n))              map.data_captacao = col;
+    else if (/^hora$|hora.?cap/.test(n))                                     map.hora_captacao = col;
+    else if (/cidade|unidade|filial/.test(n))                                map.unidade = col;
+    else if (/obs|observ|nota|comentar/.test(n))                             map.obs = col;
+    else if (/vendedor|atendente|responsavel/.test(n))                       map.vendedora = col;
+  }
+  return map;
+}
+
+function normalizarData(val) {
+  if (!val) return null;
+  // Número serial do Excel → data JS
+  if (typeof val === 'number') {
+    const d = new Date(Math.round((val - 25569) * 86400 * 1000));
+    return d.toISOString().split('T')[0];
+  }
+  const s = val.toString().trim();
+  // dd/mm/aaaa ou dd-mm-aaaa
+  const m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+  if (m) {
+    const y = m[3].length === 2 ? '20' + m[3] : m[3];
+    return `${y}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+  }
+  // aaaa-mm-dd
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  return null;
+}
+
+app.post('/api/import/preview', auth, upload.single('arquivo'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo enviado' });
+    const wb = XLSX.read(req.file.buffer, { type: 'buffer', cellDates: false });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+    if (rows.length < 2) return res.status(400).json({ error: 'Planilha vazia ou sem dados' });
+
+    const header = rows[0].map(h => h?.toString().trim()).filter(Boolean);
+    const colMap = detectarColunas(header);
+
+    if (!colMap.nome) return res.status(400).json({ error: 'Coluna "Nome" não encontrada. Verifique os cabeçalhos da planilha.' });
+
+    const unidadeFixa = req.user.cidade || null;
+    const leads = [];
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      const get = col => row[header.indexOf(col)]?.toString().trim() || null;
+      const nome = colMap.nome ? get(colMap.nome) : null;
+      if (!nome) continue;
+      const unidade = unidadeFixa || (colMap.unidade ? get(colMap.unidade) : null) || '';
+      leads.push({
+        nome,
+        telefone:        colMap.telefone        ? get(colMap.telefone)        : null,
+        curso_interesse: colMap.curso_interesse  ? get(colMap.curso_interesse) : null,
+        data_captacao:   colMap.data_captacao    ? normalizarData(get(colMap.data_captacao)) : null,
+        hora_captacao:   colMap.hora_captacao    ? get(colMap.hora_captacao)   : null,
+        unidade,
+        obs:             colMap.obs              ? get(colMap.obs)             : null,
+        vendedora:       colMap.vendedora        ? get(colMap.vendedora)       : null,
+      });
+    }
+    res.json({ total: leads.length, colunas: colMap, leads });
+  } catch (e) {
+    res.status(500).json({ error: 'Erro ao ler planilha: ' + e.message });
+  }
+});
+
+app.post('/api/import/confirmar', auth, async (req, res) => {
+  try {
+    const { leads, unidade_padrao } = req.body;
+    if (!Array.isArray(leads) || leads.length === 0) return res.status(400).json({ error: 'Nenhum lead para importar' });
+
+    const unidadeFixa = req.user.cidade || null;
+    const db = await readDB();
+    const hoje = new Date().toISOString().split('T')[0];
+    const agora = new Date().toTimeString().slice(0, 5);
+    let importados = 0;
+
+    for (const l of leads) {
+      const nome = l.nome?.trim();
+      if (!nome) continue;
+      const unidade = unidadeFixa || l.unidade || unidade_padrao;
+      if (!unidade) continue;
+      const lead = {
+        id: nextId(db, 'leads'),
+        nome,
+        telefone: l.telefone || null,
+        curso_interesse: l.curso_interesse || null,
+        data_captacao: l.data_captacao || hoje,
+        hora_captacao: l.hora_captacao || agora,
+        unidade,
+        status: 'novo',
+        agendado_data: null, agendado_hora: null,
+        vendedora: l.vendedora || null,
+        obs: l.obs || null,
+        criado_em: nowStr(),
+        atualizado_em: nowStr(),
+      };
+      db.leads.push(lead);
+      if (!db.historico) db.historico = [];
+      db.historico.push({ id: nextId(db, 'historico'), lead_id: lead.id, acao: 'criado', descricao: 'Importado via planilha', vendedora: req.user.nome || null, criado_em: nowStr() });
+      importados++;
+    }
+    await writeDB(db);
+    res.json({ importados });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
