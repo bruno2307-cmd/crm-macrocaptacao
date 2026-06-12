@@ -322,6 +322,24 @@ function normalizarData(val) {
   return null;
 }
 
+function encontrarLinhaHeader(rows) {
+  const norm = s => s?.toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+  for (let i = 0; i < Math.min(rows.length, 15); i++) {
+    const celulas = rows[i].map(norm).filter(Boolean);
+    if (celulas.some(c => c === 'nome' || c === 'name' || c === 'cliente')) return i;
+  }
+  return 0;
+}
+
+function limparTelefone(val) {
+  if (!val) return null;
+  // Remove prefixo +55, espaços, parênteses, traços — deixa só dígitos
+  const digits = val.toString().replace(/\D/g, '');
+  // Remove prefixo 55 se tiver 12-13 dígitos (com DDI)
+  if (digits.length >= 12 && digits.startsWith('55')) return digits.slice(2);
+  return digits || null;
+}
+
 app.post('/api/import/preview', auth, upload.single('arquivo'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo enviado' });
@@ -330,22 +348,27 @@ app.post('/api/import/preview', auth, upload.single('arquivo'), async (req, res)
     const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
     if (rows.length < 2) return res.status(400).json({ error: 'Planilha vazia ou sem dados' });
 
-    const header = rows[0].map(h => h?.toString().trim()).filter(Boolean);
-    const colMap = detectarColunas(header);
+    // Detecta automaticamente a linha do cabeçalho (pode não ser a linha 1)
+    const headerIdx = encontrarLinhaHeader(rows);
+    const header = rows[headerIdx].map(h => h?.toString().trim());
 
+    const colMap = detectarColunas(header.filter(Boolean));
     if (!colMap.nome) return res.status(400).json({ error: 'Coluna "Nome" não encontrada. Verifique os cabeçalhos da planilha.' });
 
     const unidadeFixa = req.user.cidade || null;
     const leads = [];
-    for (let i = 1; i < rows.length; i++) {
+    for (let i = headerIdx + 1; i < rows.length; i++) {
       const row = rows[i];
-      const get = col => row[header.indexOf(col)]?.toString().trim() || null;
+      const get = col => {
+        const idx = header.indexOf(col);
+        return idx >= 0 ? row[idx]?.toString().trim() || null : null;
+      };
       const nome = colMap.nome ? get(colMap.nome) : null;
-      if (!nome) continue;
+      if (!nome || nome === '#') continue;
       const unidade = unidadeFixa || (colMap.unidade ? get(colMap.unidade) : null) || '';
       leads.push({
         nome,
-        telefone:        colMap.telefone        ? get(colMap.telefone)        : null,
+        telefone:        limparTelefone(colMap.telefone ? get(colMap.telefone) : null),
         curso_interesse: colMap.curso_interesse  ? get(colMap.curso_interesse) : null,
         data_captacao:   colMap.data_captacao    ? normalizarData(get(colMap.data_captacao)) : null,
         hora_captacao:   colMap.hora_captacao    ? get(colMap.hora_captacao)   : null,
