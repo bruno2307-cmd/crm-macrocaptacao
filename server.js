@@ -166,6 +166,29 @@ app.get('/api/leads', auth, async (req, res) => {
   }
 });
 
+app.get('/api/leads/export', auth, async (req, res) => {
+  try {
+    const db = await readDB();
+    let base = leadsVisiveis(db.leads, req.user);
+    if (req.query.status && req.query.status !== 'todos') base = base.filter(l => l.status === req.query.status);
+    if (req.query.unidade && !req.user.cidade) base = base.filter(l => l.unidade === req.query.unidade);
+    const STATUS_PT = { novo: 'Novo', em_contato: 'Em Contato', agendado: 'Agendado', compareceu: 'Compareceu', nao_atendeu: 'Não Atendeu', nao_compareceu: 'Não Compareceu', matriculado: 'Matriculado', desistiu: 'Desistiu' };
+    const rows = base.sort((a, b) => b.id - a.id).map(l => ({
+      'ID': l.id, 'Nome': l.nome, 'Telefone': l.telefone || '', 'Curso': l.curso_interesse || '',
+      'Origem/Evento': l.origem || '', 'Cidade': l.unidade || '', 'Status': STATUS_PT[l.status] || l.status,
+      'Data Captação': l.data_captacao || '', 'Hora': l.hora_captacao || '',
+      'Agendado em': l.agendado_data || '', 'Hora Agend.': l.agendado_hora || '',
+      'Observações': l.obs || '', 'Vendedora': l.vendedora || '',
+    }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Leads');
+    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="leads-${Date.now()}.xlsx"`);
+    res.send(buf);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/api/leads/:id', auth, async (req, res) => {
   try {
     const db = await readDB();
@@ -181,26 +204,24 @@ app.get('/api/leads/:id', auth, async (req, res) => {
 
 app.post('/api/leads', auth, async (req, res) => {
   try {
-    const { nome, telefone, curso_interesse, data_captacao, hora_captacao, obs, vendedora } = req.body;
+    const { nome, telefone, curso_interesse, data_captacao, hora_captacao, obs, vendedora, origem, force } = req.body;
     if (!nome?.trim()) return res.status(400).json({ error: 'Nome é obrigatório' });
     const unidade = req.user.cidade || req.body.unidade;
     if (!unidade) return res.status(400).json({ error: 'Cidade é obrigatória' });
     const db = await readDB();
+    // Detecção de duplicata por telefone
+    if (telefone && !force) {
+      const dup = db.leads.find(l => l.telefone === telefone && l.unidade === unidade);
+      if (dup) return res.status(409).json({ error: 'duplicate', message: `Telefone já cadastrado: ${dup.nome}`, lead: { id: dup.id, nome: dup.nome, status: dup.status } });
+    }
     const lead = {
-      id: nextId(db, 'leads'),
-      nome: nome.trim(),
-      telefone: telefone || null,
+      id: nextId(db, 'leads'), nome: nome.trim(), telefone: telefone || null,
       curso_interesse: curso_interesse || null,
       data_captacao: data_captacao || new Date().toISOString().split('T')[0],
       hora_captacao: hora_captacao || new Date().toTimeString().slice(0, 5),
-      unidade,
-      status: 'novo',
-      agendado_data: null,
-      agendado_hora: null,
-      vendedora: vendedora || null,
-      obs: obs || null,
-      criado_em: nowStr(),
-      atualizado_em: nowStr(),
+      unidade, status: 'novo', agendado_data: null, agendado_hora: null,
+      vendedora: vendedora || null, obs: obs || null, origem: origem || null,
+      criado_em: nowStr(), atualizado_em: nowStr(),
     };
     db.leads.push(lead);
     if (!db.historico) db.historico = [];
@@ -220,14 +241,14 @@ app.put('/api/leads/:id', auth, async (req, res) => {
     const lead = db.leads[idx];
     if (req.user.cidade && lead.unidade !== req.user.cidade) return res.status(403).json({ error: 'Acesso negado' });
     const statusAnterior = lead.status;
-    const campos = ['nome', 'telefone', 'curso_interesse', 'data_captacao', 'hora_captacao', 'status', 'agendado_data', 'agendado_hora', 'vendedora', 'obs'];
+    const campos = ['nome', 'telefone', 'curso_interesse', 'data_captacao', 'hora_captacao', 'status', 'agendado_data', 'agendado_hora', 'vendedora', 'obs', 'origem'];
     if (req.user.role === 'admin') campos.push('unidade');
     for (const c of campos) { if (c in req.body) lead[c] = req.body[c]; }
     lead.atualizado_em = nowStr();
     db.leads[idx] = lead;
     if (req.body.status && req.body.status !== statusAnterior) {
       if (!db.historico) db.historico = [];
-      const L = { novo: 'Novo', em_contato: 'Em Contato', agendado: 'Agendado', nao_atendeu: 'Não Atendeu', nao_compareceu: 'Não Compareceu', matriculado: 'Matriculado', desistiu: 'Desistiu' };
+      const L = { novo: 'Novo', em_contato: 'Em Contato', agendado: 'Agendado', compareceu: 'Compareceu', nao_atendeu: 'Não Atendeu', nao_compareceu: 'Não Compareceu', matriculado: 'Matriculado', desistiu: 'Desistiu' };
       db.historico.push({ id: nextId(db, 'historico'), lead_id: lead.id, acao: 'status', descricao: `${L[statusAnterior] || statusAnterior} → ${L[req.body.status] || req.body.status}`, vendedora: req.body.vendedora || req.user.nome || null, criado_em: nowStr() });
     }
     await writeDB(db);
@@ -279,10 +300,10 @@ app.get('/api/stats', auth, async (req, res) => {
       total,
       hoje: base.filter(l => l.criado_em?.startsWith(hoje)).length,
       novo: s.novo || 0, em_contato: s.em_contato || 0, agendado: s.agendado || 0,
-      nao_atendeu: s.nao_atendeu || 0, nao_compareceu: s.nao_compareceu || 0,
-      matriculado: s.matriculado || 0, desistiu: s.desistiu || 0,
+      compareceu: s.compareceu || 0, nao_atendeu: s.nao_atendeu || 0,
+      nao_compareceu: s.nao_compareceu || 0, matriculado: s.matriculado || 0, desistiu: s.desistiu || 0,
       taxa_conversao: total > 0 ? Math.round((s.matriculado || 0) / total * 100) : 0,
-      taxa_agendamento: total > 0 ? Math.round(((s.agendado || 0) + (s.matriculado || 0)) / total * 100) : 0,
+      taxa_agendamento: total > 0 ? Math.round(((s.agendado || 0) + (s.compareceu || 0) + (s.matriculado || 0)) / total * 100) : 0,
     });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -313,6 +334,7 @@ function detectarColunas(header) {
     else if (/^hora$|hora.?cap/.test(n))                                     map.hora_captacao = col;
     else if (/cidade|unidade|filial/.test(n))                                map.unidade = col;
     else if (/obs|observ|nota|comentar/.test(n))                             map.obs = col;
+    else if (/origem|evento|feirão|feirao|acao|captac/.test(n))             map.origem = col;
     else if (/vendedor|atendente|responsavel/.test(n))                       map.vendedora = col;
   }
   return map;
@@ -400,42 +422,40 @@ app.post('/api/import/preview', auth, upload.single('arquivo'), async (req, res)
 
 app.post('/api/import/confirmar', auth, async (req, res) => {
   try {
-    const { leads, unidade_padrao } = req.body;
+    const { leads, unidade_padrao, origem_padrao } = req.body;
     if (!Array.isArray(leads) || leads.length === 0) return res.status(400).json({ error: 'Nenhum lead para importar' });
 
     const unidadeFixa = req.user.cidade || null;
     const db = await readDB();
     const hoje = new Date().toISOString().split('T')[0];
     const agora = new Date().toTimeString().slice(0, 5);
-    let importados = 0;
+    const telefonesExistentes = new Set(db.leads.map(l => l.telefone).filter(Boolean));
+    let importados = 0, duplicatas = 0;
 
     for (const l of leads) {
       const nome = l.nome?.trim();
       if (!nome) continue;
       const unidade = unidadeFixa || l.unidade || unidade_padrao;
       if (!unidade) continue;
+      // Pula duplicata por telefone
+      if (l.telefone && telefonesExistentes.has(l.telefone)) { duplicatas++; continue; }
       const lead = {
-        id: nextId(db, 'leads'),
-        nome,
-        telefone: l.telefone || null,
+        id: nextId(db, 'leads'), nome, telefone: l.telefone || null,
         curso_interesse: l.curso_interesse || null,
-        data_captacao: l.data_captacao || hoje,
-        hora_captacao: l.hora_captacao || agora,
-        unidade,
-        status: 'novo',
-        agendado_data: null, agendado_hora: null,
-        vendedora: l.vendedora || null,
-        obs: l.obs || null,
-        criado_em: nowStr(),
-        atualizado_em: nowStr(),
+        data_captacao: l.data_captacao || hoje, hora_captacao: l.hora_captacao || agora,
+        unidade, status: 'novo', agendado_data: null, agendado_hora: null,
+        vendedora: l.vendedora || null, obs: l.obs || null,
+        origem: l.origem || origem_padrao || null,
+        criado_em: nowStr(), atualizado_em: nowStr(),
       };
       db.leads.push(lead);
+      telefonesExistentes.add(l.telefone);
       if (!db.historico) db.historico = [];
       db.historico.push({ id: nextId(db, 'historico'), lead_id: lead.id, acao: 'criado', descricao: 'Importado via planilha', vendedora: req.user.nome || null, criado_em: nowStr() });
       importados++;
     }
     await writeDB(db);
-    res.json({ importados });
+    res.json({ importados, duplicatas });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
