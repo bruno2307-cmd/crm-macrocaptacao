@@ -1196,7 +1196,7 @@ function app() {
 
     historicoOrdenado() {
       const h = this.modal.lead?.historico ?? [];
-      return [...h].reverse();
+      return h.slice().sort((a, b) => b.id - a.id);
     },
 
     toggleSelect(id, checked) {
