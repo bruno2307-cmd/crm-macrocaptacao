@@ -251,6 +251,21 @@ app.delete('/api/leads/:id', auth, async (req, res) => {
   }
 });
 
+app.delete('/api/leads', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') return res.status(403).json({ error: 'Apenas o admin pode excluir' });
+    const ids = (req.body.ids || []).map(Number).filter(Boolean);
+    if (!ids.length) return res.status(400).json({ error: 'Nenhum ID informado' });
+    const db = await readDB();
+    db.leads = db.leads.filter(l => !ids.includes(l.id));
+    db.historico = (db.historico || []).filter(h => !ids.includes(h.lead_id));
+    await writeDB(db);
+    res.json({ success: true, removidos: ids.length });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.get('/api/stats', auth, async (req, res) => {
   try {
     const db = await readDB();
