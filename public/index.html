@@ -605,7 +605,7 @@
             <!-- linha vertical da timeline -->
             <div class="absolute left-[11px] top-3 bottom-3 w-px bg-slate-100"></div>
             <div class="space-y-3">
-              <template x-for="h in [...(modal.lead?.historico ?? [])].reverse()" :key="h.id">
+              <template x-for="h in historicoOrdenado()" :key="h.id">
                 <div class="flex gap-3">
 
                   <!-- ícone do tipo -->
@@ -1193,6 +1193,11 @@ function app() {
     },
 
     // ── Seleção em massa ──────────────────────────────────────────────────
+
+    historicoOrdenado() {
+      const h = this.modal.lead?.historico ?? [];
+      return [...h].reverse();
+    },
 
     toggleSelect(id, checked) {
       if (checked) { if (!this.selectedLeads.includes(id)) this.selectedLeads.push(id); }
