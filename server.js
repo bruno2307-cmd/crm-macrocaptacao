@@ -97,7 +97,7 @@ function nextId(db, table) {
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 function nowStr() {
-  return new Date().toISOString().replace('T', ' ').slice(0, 19);
+  return new Date().toISOString(); // UTC com Z — browser converte para horário local
 }
 
 function readUsers() {
