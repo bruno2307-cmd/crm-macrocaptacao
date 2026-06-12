@@ -320,7 +320,7 @@
                         </svg>
                       </button>
                       <button @click="openModal('schedule', lead)"
-                        x-show="['novo','em_contato','nao_atendeu','nao_compareceu'].includes(lead.status)"
+                        x-show="['novo','em_contato','nao_atendeu','nao_compareceu','compareceu'].includes(lead.status)"
                         title="Agendar" class="p-1.5 rounded-lg bg-amber-50 text-amber-600 hover:bg-amber-100 transition-colors">
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
@@ -567,11 +567,14 @@
               x-show="['novo'].includes(modal.lead?.status)"
               class="px-3 py-2 bg-blue-50 text-blue-700 rounded-xl text-xs font-medium hover:bg-blue-100 transition-colors">📞 Ligou</button>
             <button @click="closeModal(); $nextTick(() => openModal('schedule', modal.lead))"
-              x-show="['novo','em_contato','nao_atendeu','nao_compareceu'].includes(modal.lead?.status)"
+              x-show="['novo','em_contato','nao_atendeu','nao_compareceu','compareceu'].includes(modal.lead?.status)"
               class="px-3 py-2 bg-amber-50 text-amber-700 rounded-xl text-xs font-medium hover:bg-amber-100 transition-colors">📅 Agendar</button>
             <button @click="quickStatus(modal.lead, 'nao_atendeu'); refreshView(modal.lead.id)"
               x-show="['novo','em_contato'].includes(modal.lead?.status)"
               class="px-3 py-2 bg-orange-50 text-orange-700 rounded-xl text-xs font-medium hover:bg-orange-100 transition-colors">📵 Não Atendeu</button>
+            <button @click="quickStatus(modal.lead, 'compareceu'); refreshView(modal.lead.id)"
+              x-show="['agendado'].includes(modal.lead?.status)"
+              class="px-3 py-2 bg-purple-50 text-purple-700 rounded-xl text-xs font-medium hover:bg-purple-100 transition-colors">🤝 Compareceu</button>
             <button @click="quickStatus(modal.lead, 'nao_compareceu'); refreshView(modal.lead.id)"
               x-show="['agendado'].includes(modal.lead?.status)"
               class="px-3 py-2 bg-red-50 text-red-700 rounded-xl text-xs font-medium hover:bg-red-100 transition-colors">❌ Não Compareceu</button>
@@ -897,6 +900,7 @@ function app() {
       { value: 'novo',          label: '🆕 Novos' },
       { value: 'em_contato',    label: '📞 Em Contato' },
       { value: 'agendado',      label: '📅 Agendados' },
+      { value: 'compareceu',    label: '🤝 Compareceu' },
       { value: 'nao_atendeu',   label: '📵 Não Atendeu' },
       { value: 'nao_compareceu',label: '❌ Não Compareceu' },
       { value: 'matriculado',   label: '✅ Matriculados' },
@@ -907,6 +911,7 @@ function app() {
       { value: 'novo',          label: '🆕 Novo' },
       { value: 'em_contato',    label: '📞 Em Contato' },
       { value: 'agendado',      label: '📅 Agendado' },
+      { value: 'compareceu',    label: '🤝 Compareceu' },
       { value: 'nao_atendeu',   label: '📵 Não Atendeu' },
       { value: 'nao_compareceu',label: '❌ Não Compareceu' },
       { value: 'matriculado',   label: '✅ Matriculado' },
@@ -917,13 +922,14 @@ function app() {
 
     badge(status) {
       const m = {
-        novo:           { label: 'Novo',           icon: '🆕', cls: 'bg-slate-100 text-slate-600' },
-        em_contato:     { label: 'Em Contato',     icon: '📞', cls: 'bg-blue-100 text-blue-700' },
-        agendado:       { label: 'Agendado',       icon: '📅', cls: 'bg-amber-100 text-amber-700' },
-        nao_atendeu:    { label: 'Não Atendeu',    icon: '📵', cls: 'bg-orange-100 text-orange-700' },
-        nao_compareceu: { label: 'Não Compareceu', icon: '❌', cls: 'bg-red-100 text-red-700' },
-        matriculado:    { label: 'Matriculado',    icon: '✅', cls: 'bg-green-100 text-green-700' },
-        desistiu:       { label: 'Desistiu',       icon: '🚫', cls: 'bg-gray-100 text-gray-500' },
+        novo:           { label: 'Novo',              icon: '🆕', cls: 'bg-slate-100 text-slate-600' },
+        em_contato:     { label: 'Em Contato',      icon: '📞', cls: 'bg-blue-100 text-blue-700' },
+        agendado:       { label: 'Agendado',        icon: '📅', cls: 'bg-amber-100 text-amber-700' },
+        compareceu:     { label: 'Compareceu',      icon: '🤝', cls: 'bg-purple-100 text-purple-700' },
+        nao_atendeu:    { label: 'Não Atendeu',     icon: '📵', cls: 'bg-orange-100 text-orange-700' },
+        nao_compareceu: { label: 'Não Compareceu',  icon: '❌', cls: 'bg-red-100 text-red-700' },
+        matriculado:    { label: 'Matriculado',     icon: '✅', cls: 'bg-green-100 text-green-700' },
+        desistiu:       { label: 'Desistiu',        icon: '🚫', cls: 'bg-gray-100 text-gray-500' },
       };
       return m[status] ?? { label: status ?? '—', icon: '•', cls: 'bg-gray-100 text-gray-500' };
     },
