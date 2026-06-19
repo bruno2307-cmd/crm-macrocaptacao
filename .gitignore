@@ -3,3 +3,4 @@ leads.json
 .env
 .env.local
 *.tmp
+.vercel
