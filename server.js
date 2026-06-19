@@ -306,8 +306,8 @@ app.post('/api/leads', auth, async (req, res) => {
     if (!db.historico) db.historico = [];
     db.historico.push({ id: nextId(db, 'historico'), lead_id: lead.id, acao: 'criado', descricao: 'Lead cadastrado', vendedora: vendedora || req.user.nome || null, criado_em: nowStr() });
     await writeDB(db);
+    await notificarPush(unidade, `Novo lead — ${unidade}`, `${lead.nome}${lead.curso_interesse ? ' · ' + lead.curso_interesse : ''}`);
     res.json(lead);
-    notificarPush(unidade, `Novo lead — ${unidade}`, `${lead.nome}${lead.curso_interesse ? ' · ' + lead.curso_interesse : ''}`);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -535,10 +535,10 @@ app.post('/api/import/confirmar', auth, async (req, res) => {
       importados++;
     }
     await writeDB(db);
-    res.json({ importados, duplicatas });
     if (importados > 0 && unidadeFixa) {
-      notificarPush(unidadeFixa, `${importados} leads importados — ${unidadeFixa}`, 'Toque para ver a lista atualizada');
+      await notificarPush(unidadeFixa, `${importados} leads importados — ${unidadeFixa}`, 'Toque para ver a lista atualizada');
     }
+    res.json({ importados, duplicatas });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
