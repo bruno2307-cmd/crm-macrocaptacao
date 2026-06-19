@@ -127,10 +127,10 @@
             <span class="hidden sm:inline">Novo Lead</span>
             <span class="sm:hidden">Novo</span>
           </button>
-          <button x-show="pushStatus !== 'unsupported'" x-cloak
-            @click="pushStatus !== 'active' && pushStatus !== 'denied' && ativarNotificacoes()"
-            :title="pushStatus === 'active' ? 'Notificações ativadas' : pushStatus === 'denied' ? 'Notificações bloqueadas no navegador' : 'Ativar notificações de lead novo'"
-            :class="pushStatus === 'active' ? 'text-blue-600 bg-blue-50' : pushStatus === 'denied' ? 'text-slate-300 cursor-not-allowed' : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'"
+          <button
+            @click="ativarNotificacoes()"
+            :title="pushStatus === 'active' ? 'Notificações ativadas' : pushStatus === 'denied' ? 'Notificações bloqueadas no navegador' : pushStatus === 'unsupported' ? (pushMotivo || 'Notificações não suportadas') : 'Ativar notificações de lead novo'"
+            :class="pushStatus === 'active' ? 'text-blue-600 bg-blue-50' : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'"
             class="p-2 rounded-xl transition-colors">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
@@ -1006,6 +1006,7 @@ function app() {
     form: {},
     scheduleForm: { data: '', hora: '', obs: '' },
     pushStatus: 'unsupported', // unsupported | denied | inactive | active
+    pushMotivo: '',
 
     statusTabs: [
       { value: 'todos',         label: 'Todos' },
@@ -1203,25 +1204,49 @@ function app() {
       return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
     },
 
+    // Detecta por que push não funcionaria neste navegador/dispositivo —
+    // usado pra mostrar um motivo real em vez de só esconder o sino.
+    detectarSuportePush() {
+      if (!('serviceWorker' in navigator)) return 'Este navegador não suporta notificações.';
+      if (typeof Notification === 'undefined' || !('PushManager' in window)) {
+        const ua = navigator.userAgent || '';
+        const isIOS = /iphone|ipad|ipod/i.test(ua);
+        const standalone = window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
+        if (isIOS && !standalone) return 'No iPhone, notificações só funcionam abrindo o app pelo ícone salvo na Tela de Início — não dentro do Safari.';
+        if (isIOS) return 'Seu iPhone precisa estar no iOS 16.4 ou mais recente pra suportar notificações.';
+        return 'Este navegador não suporta notificações push.';
+      }
+      return null;
+    },
+
     // Checa silenciosamente se já existe inscrição ativa (sem pedir permissão)
     async initPush() {
-      if (!('serviceWorker' in navigator) || !('PushManager' in window)) { this.pushStatus = 'unsupported'; return; }
-      if (Notification.permission === 'denied') { this.pushStatus = 'denied'; return; }
+      const motivo = this.detectarSuportePush();
+      if (motivo) { this.pushStatus = 'unsupported'; this.pushMotivo = motivo; return; }
       try {
-        const reg = await navigator.serviceWorker.ready;
+        if (Notification.permission === 'denied') { this.pushStatus = 'denied'; return; }
+        const reg = await Promise.race([
+          navigator.serviceWorker.ready,
+          new Promise((_, rej) => setTimeout(() => rej(new Error('Tempo esgotado registrando o service worker')), 6000)),
+        ]);
         const sub = await reg.pushManager.getSubscription();
         this.pushStatus = sub ? 'active' : 'inactive';
-      } catch { this.pushStatus = 'inactive'; }
+      } catch (e) {
+        this.pushStatus = 'inactive';
+        this.pushMotivo = e?.message || String(e);
+      }
     },
 
     // Pedido de permissão precisa vir de clique do usuário (gesture) — por isso é separado do initPush
     async ativarNotificacoes() {
-      if (!('serviceWorker' in navigator) || !('PushManager' in window)) { this.pushStatus = 'unsupported'; return; }
+      const motivo = this.detectarSuportePush();
+      if (motivo) { this.pushStatus = 'unsupported'; this.pushMotivo = motivo; alert(motivo); return; }
       try {
         const permissao = await Notification.requestPermission();
         if (permissao !== 'granted') { this.pushStatus = 'denied'; return; }
-        const { publicKey } = await this.api('/api/push/public-key').then(r => r?.json() ?? {});
-        if (!publicKey) { this.pushStatus = 'unsupported'; return; }
+        const r = await this.api('/api/push/public-key');
+        const { publicKey } = await (r ? r.json() : {});
+        if (!publicKey) { this.pushStatus = 'unsupported'; this.pushMotivo = 'Servidor sem chave de notificação configurada.'; alert(this.pushMotivo); return; }
         const reg = await navigator.serviceWorker.ready;
         const sub = await reg.pushManager.subscribe({
           userVisibleOnly: true,
@@ -1229,8 +1254,10 @@ function app() {
         });
         await this.api('/api/push/subscribe', { method: 'POST', body: JSON.stringify({ subscription: sub.toJSON() }) });
         this.pushStatus = 'active';
-      } catch {
+      } catch (e) {
         this.pushStatus = 'inactive';
+        this.pushMotivo = e?.message || String(e);
+        alert('Não consegui ativar notificações: ' + this.pushMotivo);
       }
     },
 
