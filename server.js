@@ -5,6 +5,7 @@ const jwt = require('jsonwebtoken');
 const { networkInterfaces } = require('os');
 const multer = require('multer');
 const XLSX = require('xlsx');
+const webpush = require('web-push');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -14,6 +15,15 @@ const JWT_SECRET = process.env.JWT_SECRET || 'crm-macrocaptacao-secret-local';
 const USERS_FILE = path.join(__dirname, 'users.json');
 const DATA_FILE = path.join(__dirname, 'leads.json');
 const CIDADES = ['Santa Fé do Sul', 'Aparecida do Taboado', 'Paranaíba'];
+
+// ── Notificações push ──────────────────────────────────────────────────────
+
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
+const PUSH_ATIVO = !!(VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY);
+if (PUSH_ATIVO) {
+  webpush.setVapidDetails('mailto:brunosantosaraujodasilva23@gmail.com', VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+}
 
 // Detecta modo de armazenamento
 const USE_GITHUB = !!(process.env.GITHUB_TOKEN && process.env.GITHUB_REPO);
@@ -30,10 +40,11 @@ async function githubReadDB() {
       Accept: 'application/vnd.github.v3+json',
     },
   });
-  if (!res.ok) return { leads: [], historico: [], _seq: { leads: 1, historico: 1 }, _sha: null };
+  if (!res.ok) return { leads: [], historico: [], push_subscriptions: [], _seq: { leads: 1, historico: 1 }, _sha: null };
   const data = await res.json();
   const content = JSON.parse(Buffer.from(data.content, 'base64').toString('utf8'));
   content._sha = data.sha;
+  if (!content.push_subscriptions) content.push_subscriptions = [];
   return content;
 }
 
@@ -61,8 +72,10 @@ async function githubWriteDB(data) {
 // ── Banco JSON local ───────────────────────────────────────────────────────
 
 function localReadDB() {
-  if (!fs.existsSync(DATA_FILE)) return { leads: [], historico: [], _seq: { leads: 1, historico: 1 } };
-  return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+  if (!fs.existsSync(DATA_FILE)) return { leads: [], historico: [], push_subscriptions: [], _seq: { leads: 1, historico: 1 } };
+  const db = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+  if (!db.push_subscriptions) db.push_subscriptions = [];
+  return db;
 }
 
 function localWriteDB(data) {
@@ -108,6 +121,33 @@ function leadsVisiveis(leads, user) {
   return user.cidade ? leads.filter(l => l.unidade === user.cidade) : leads;
 }
 
+// Envia push pros usuários daquela cidade + admins (cidade null). Roda em
+// background — não atrasa a resposta de quem está cadastrando o lead.
+async function notificarPush(cidade, title, body) {
+  if (!PUSH_ATIVO) return;
+  try {
+    const db = await readDB();
+    const todas = db.push_subscriptions || [];
+    const alvo = todas.filter(s => !s.cidade || s.cidade === cidade);
+    if (alvo.length === 0) return;
+    const payload = JSON.stringify({ title, body, url: '/' });
+    const expirados = [];
+    await Promise.all(alvo.map(async (sub) => {
+      try {
+        await webpush.sendNotification({ endpoint: sub.endpoint, keys: sub.keys }, payload);
+      } catch (e) {
+        if (e.statusCode === 404 || e.statusCode === 410) expirados.push(sub.endpoint);
+      }
+    }));
+    if (expirados.length) {
+      db.push_subscriptions = todas.filter(s => !expirados.includes(s.endpoint));
+      await writeDB(db);
+    }
+  } catch {
+    // notificação é best-effort — falha aqui nunca deve quebrar o fluxo do CRM
+  }
+}
+
 // ── Auth JWT ───────────────────────────────────────────────────────────────
 
 function signToken(user) {
@@ -146,6 +186,45 @@ app.post('/api/login', (req, res) => {
 
 app.post('/api/logout', auth, (_req, res) => res.json({ success: true }));
 app.get('/api/me', auth, (req, res) => res.json(req.user));
+
+// ── Push (notificações) ───────────────────────────────────────────────────
+
+app.get('/api/push/public-key', auth, (req, res) => {
+  res.json({ publicKey: PUSH_ATIVO ? VAPID_PUBLIC_KEY : null });
+});
+
+app.post('/api/push/subscribe', auth, async (req, res) => {
+  try {
+    const { subscription } = req.body;
+    if (!subscription?.endpoint || !subscription?.keys) return res.status(400).json({ error: 'Subscription inválida' });
+    const db = await readDB();
+    if (!db.push_subscriptions) db.push_subscriptions = [];
+    db.push_subscriptions = db.push_subscriptions.filter(s => s.endpoint !== subscription.endpoint);
+    db.push_subscriptions.push({
+      endpoint: subscription.endpoint,
+      keys: subscription.keys,
+      user_id: req.user.id,
+      cidade: req.user.cidade || null,
+      criado_em: nowStr(),
+    });
+    await writeDB(db);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/push/unsubscribe', auth, async (req, res) => {
+  try {
+    const { endpoint } = req.body;
+    const db = await readDB();
+    db.push_subscriptions = (db.push_subscriptions || []).filter(s => s.endpoint !== endpoint);
+    await writeDB(db);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 
 // ── Leads ──────────────────────────────────────────────────────────────────
 
@@ -228,6 +307,7 @@ app.post('/api/leads', auth, async (req, res) => {
     db.historico.push({ id: nextId(db, 'historico'), lead_id: lead.id, acao: 'criado', descricao: 'Lead cadastrado', vendedora: vendedora || req.user.nome || null, criado_em: nowStr() });
     await writeDB(db);
     res.json(lead);
+    notificarPush(unidade, `Novo lead — ${unidade}`, `${lead.nome}${lead.curso_interesse ? ' · ' + lead.curso_interesse : ''}`);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -456,6 +536,9 @@ app.post('/api/import/confirmar', auth, async (req, res) => {
     }
     await writeDB(db);
     res.json({ importados, duplicatas });
+    if (importados > 0 && unidadeFixa) {
+      notificarPush(unidadeFixa, `${importados} leads importados — ${unidadeFixa}`, 'Toque para ver a lista atualizada');
+    }
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

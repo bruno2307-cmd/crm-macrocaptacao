@@ -127,6 +127,15 @@
             <span class="hidden sm:inline">Novo Lead</span>
             <span class="sm:hidden">Novo</span>
           </button>
+          <button x-show="pushStatus !== 'unsupported'" x-cloak
+            @click="pushStatus !== 'active' && pushStatus !== 'denied' && ativarNotificacoes()"
+            :title="pushStatus === 'active' ? 'Notificações ativadas' : pushStatus === 'denied' ? 'Notificações bloqueadas no navegador' : 'Ativar notificações de lead novo'"
+            :class="pushStatus === 'active' ? 'text-blue-600 bg-blue-50' : pushStatus === 'denied' ? 'text-slate-300 cursor-not-allowed' : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'"
+            class="p-2 rounded-xl transition-colors">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+            </svg>
+          </button>
           <button @click="logout()" title="Sair"
             class="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -996,6 +1005,7 @@ function app() {
     modal: { open: false, type: null, lead: null },
     form: {},
     scheduleForm: { data: '', hora: '', obs: '' },
+    pushStatus: 'unsupported', // unsupported | denied | inactive | active
 
     statusTabs: [
       { value: 'todos',         label: 'Todos' },
@@ -1181,6 +1191,47 @@ function app() {
       this.cidades = cidades;
       this.cursos = cursos;
       await Promise.all([this.loadLeads(), this.loadStats(), this.isAdmin() ? this.loadAllStats() : Promise.resolve()]);
+      this.initPush();
+    },
+
+    // ── Notificações push ────────────────────────────────────────────────
+
+    urlBase64ToUint8Array(base64String) {
+      const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+      const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+      const raw = atob(base64);
+      return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+    },
+
+    // Checa silenciosamente se já existe inscrição ativa (sem pedir permissão)
+    async initPush() {
+      if (!('serviceWorker' in navigator) || !('PushManager' in window)) { this.pushStatus = 'unsupported'; return; }
+      if (Notification.permission === 'denied') { this.pushStatus = 'denied'; return; }
+      try {
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.getSubscription();
+        this.pushStatus = sub ? 'active' : 'inactive';
+      } catch { this.pushStatus = 'inactive'; }
+    },
+
+    // Pedido de permissão precisa vir de clique do usuário (gesture) — por isso é separado do initPush
+    async ativarNotificacoes() {
+      if (!('serviceWorker' in navigator) || !('PushManager' in window)) { this.pushStatus = 'unsupported'; return; }
+      try {
+        const permissao = await Notification.requestPermission();
+        if (permissao !== 'granted') { this.pushStatus = 'denied'; return; }
+        const { publicKey } = await this.api('/api/push/public-key').then(r => r?.json() ?? {});
+        if (!publicKey) { this.pushStatus = 'unsupported'; return; }
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: this.urlBase64ToUint8Array(publicKey),
+        });
+        await this.api('/api/push/subscribe', { method: 'POST', body: JSON.stringify({ subscription: sub.toJSON() }) });
+        this.pushStatus = 'active';
+      } catch {
+        this.pushStatus = 'inactive';
+      }
     },
 
     async loadLeads() {
