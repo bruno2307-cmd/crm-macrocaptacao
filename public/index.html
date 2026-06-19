@@ -1243,7 +1243,11 @@ function app() {
       if (motivo) { this.pushStatus = 'unsupported'; this.pushMotivo = motivo; alert(motivo); return; }
       try {
         const permissao = await Notification.requestPermission();
-        if (permissao !== 'granted') { this.pushStatus = 'denied'; return; }
+        if (permissao !== 'granted') {
+          this.pushStatus = 'denied';
+          alert('Notificações estão bloqueadas. Pra liberar: vá em Ajustes do celular → Notificações → "CRM Macrocaptação" (ou "CRM Via Certa") → ative "Permitir Notificações". No Android, pode ser em Ajustes → Apps → CRM Via Certa → Notificações.');
+          return;
+        }
         const r = await this.api('/api/push/public-key');
         const { publicKey } = await (r ? r.json() : {});
         if (!publicKey) { this.pushStatus = 'unsupported'; this.pushMotivo = 'Servidor sem chave de notificação configurada.'; alert(this.pushMotivo); return; }
