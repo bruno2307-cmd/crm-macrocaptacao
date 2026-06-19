@@ -113,6 +113,12 @@ function nowStr() {
   return new Date().toISOString(); // UTC com Z — browser converte para horário local
 }
 
+function formatarDataHora(data, hora) {
+  if (!data) return '';
+  const [y, m, d] = data.split('-');
+  return hora ? `${d}/${m} às ${hora}` : `${d}/${m}`;
+}
+
 function readUsers() {
   return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8')).users;
 }
@@ -326,12 +332,21 @@ app.put('/api/leads/:id', auth, async (req, res) => {
     for (const c of campos) { if (c in req.body) lead[c] = req.body[c]; }
     lead.atualizado_em = nowStr();
     db.leads[idx] = lead;
+    let pushTitle = null, pushBody = null;
     if (req.body.status && req.body.status !== statusAnterior) {
       if (!db.historico) db.historico = [];
       const L = { novo: 'Novo', em_contato: 'Em Contato', agendado: 'Agendado', compareceu: 'Compareceu', nao_atendeu: 'Não Atendeu', nao_compareceu: 'Não Compareceu', matriculado: 'Matriculado', desistiu: 'Desistiu' };
       db.historico.push({ id: nextId(db, 'historico'), lead_id: lead.id, acao: 'status', descricao: `${L[statusAnterior] || statusAnterior} → ${L[req.body.status] || req.body.status}`, vendedora: req.body.vendedora || req.user.nome || null, criado_em: nowStr() });
+      if (req.body.status === 'agendado') {
+        pushTitle = `Agendamento marcado — ${lead.unidade}`;
+        pushBody = `${lead.nome}${lead.agendado_data ? ' · ' + formatarDataHora(lead.agendado_data, lead.agendado_hora) : ''}`;
+      } else if (req.body.status === 'matriculado') {
+        pushTitle = `Matrícula confirmada! 🎉 — ${lead.unidade}`;
+        pushBody = lead.nome;
+      }
     }
     await writeDB(db);
+    if (pushTitle) await notificarPush(lead.unidade, pushTitle, pushBody);
     res.json(lead);
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -547,6 +562,30 @@ app.post('/api/import/confirmar', auth, async (req, res) => {
 app.get('/api/cidades', auth, (req, res) => {
   if (req.user.cidade) return res.json([req.user.cidade]);
   res.json(CIDADES);
+});
+
+// ── Cron (resumo diário) ───────────────────────────────────────────────────
+// Chamado 1x por dia pelo Vercel Cron (vercel.json) — autenticado por secret,
+// não por login de usuário.
+
+app.get('/api/cron/resumo-diario', async (req, res) => {
+  const token = (req.headers.authorization || '').replace('Bearer ', '').trim();
+  if (!process.env.CRON_SECRET || token !== process.env.CRON_SECRET) {
+    return res.status(401).json({ error: 'Não autorizado' });
+  }
+  try {
+    const db = await readDB();
+    const hoje = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
+    for (const cidade of CIDADES) {
+      const n = db.leads.filter(l => l.unidade === cidade && l.agendado_data === hoje && l.status === 'agendado').length;
+      const title = n > 0 ? `${n} agendamento${n > 1 ? 's' : ''} hoje — ${cidade}` : `0 agendamentos hoje — ${cidade}`;
+      const body = n > 0 ? 'Toque pra ver a agenda do dia' : 'O que vamos fazer pra preencher a agenda?';
+      await notificarPush(cidade, title, body);
+    }
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.post('/api/leads/:id/historico', auth, async (req, res) => {
