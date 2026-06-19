@@ -2,5 +2,5 @@
   "version": 2,
   "builds": [{ "src": "server.js", "use": "@vercel/node" }],
   "routes": [{ "src": "/(.*)", "dest": "/server.js" }],
-  "crons": [{ "path": "/api/cron/resumo-diario", "schedule": "0 11 * * *" }]
+  "crons": [{ "path": "/api/cron/resumo-diario", "schedule": "0 16 * * *" }]
 }
