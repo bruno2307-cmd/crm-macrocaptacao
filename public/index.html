@@ -24,6 +24,10 @@
     ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 99px; }
     .fade-in { animation: fadeIn 0.15s ease; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+    @keyframes barGrow { from { width: 0%; } to { } }
+    .bar-anim { animation: barGrow 0.7s cubic-bezier(.4,0,.2,1) both; }
+    .stat-card:hover { transform: translateY(-2px); }
+    .stat-card { transition: transform 0.15s ease, box-shadow 0.15s ease; }
   </style>
 </head>
 <body class="bg-slate-50 min-h-screen" x-data="app()" x-init="init()">
@@ -181,43 +185,129 @@
       </div>
 
       <!-- ── BANNER cidade do usuário (não-admin) ── -->
-      <div x-show="!isAdmin()" class="rounded-2xl p-4 text-white shadow-sm"
+      <div x-show="!isAdmin()" class="rounded-2xl p-5 text-white shadow-md overflow-hidden relative"
            :class="cidadeBadge(auth.user?.cidade).headerBg">
-        <div class="flex items-center justify-between">
-          <div>
-            <p class="text-xs font-semibold uppercase tracking-wide opacity-75">Sua unidade</p>
-            <p class="text-xl font-bold mt-0.5" x-text="auth.user?.cidade"></p>
+        <div class="absolute -right-6 -top-6 w-32 h-32 bg-white/10 rounded-full pointer-events-none"></div>
+        <div class="absolute right-12 -bottom-5 w-20 h-20 bg-white/10 rounded-full pointer-events-none"></div>
+        <div class="relative flex items-center justify-between gap-4">
+          <div class="flex-1 min-w-0">
+            <p class="text-xs font-semibold uppercase tracking-widest opacity-70">Sua unidade</p>
+            <p class="text-2xl font-black mt-0.5 truncate" x-text="auth.user?.cidade"></p>
+            <p class="text-sm opacity-85 mt-1.5 font-medium" x-text="
+              (stats.matriculado ?? 0) >= 30 ? '🎉 Meta batida! Resultado incrível!' :
+              (stats.matriculado ?? 0) >= 20 ? `🔥 Quase lá! Faltam só ${30-(stats.matriculado??0)} matrículas!` :
+              (stats.matriculado ?? 0) >= 10 ? '💪 Metade do caminho! Continue fechando!' :
+              (stats.matriculado ?? 0) > 0  ? `⚡ Ótimo começo! Vamos buscar mais matrículas!` :
+              '🚀 Bora começar! Contate os leads novos agora!'
+            "></p>
           </div>
-          <div class="text-right">
-            <p class="text-3xl font-bold" x-text="stats.total ?? 0"></p>
-            <p class="text-xs opacity-75">leads no total</p>
+          <div class="text-right shrink-0">
+            <p class="text-5xl font-black leading-none" x-text="stats.total ?? 0"></p>
+            <p class="text-xs opacity-70 mt-1">leads no total</p>
           </div>
         </div>
       </div>
 
       <!-- ── STATS ── -->
-      <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
-        <div class="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
-          <p class="text-xs text-slate-400 font-medium">Sem contato</p>
-          <p class="text-2xl font-bold text-orange-500 mt-0.5" x-text="stats.novo ?? 0"></p>
+      <div class="space-y-3">
+
+        <!-- Hero: Matrículas + barra de meta -->
+        <div class="rounded-2xl p-5 text-white shadow-lg overflow-hidden relative"
+             style="background: linear-gradient(135deg, #16a34a 0%, #059669 60%, #0d9488 100%);">
+          <div class="absolute -right-8 -top-8 w-36 h-36 bg-white/10 rounded-full pointer-events-none"></div>
+          <div class="absolute right-14 -bottom-6 w-24 h-24 bg-white/10 rounded-full pointer-events-none"></div>
+          <div class="relative">
+            <div class="flex items-start justify-between gap-4">
+              <div class="flex-1">
+                <div class="flex items-center gap-2 mb-2">
+                  <span class="text-2xl leading-none">🏆</span>
+                  <span class="text-xs font-bold uppercase tracking-widest opacity-80">Matrículas</span>
+                </div>
+                <p class="text-6xl font-black leading-none" x-text="stats.matriculado ?? 0"></p>
+                <p class="text-sm opacity-75 mt-2" x-text="`${stats.taxa_conversao ?? 0}% de conversão dos leads`"></p>
+              </div>
+              <div class="shrink-0 bg-white/15 rounded-2xl px-4 py-3 text-center backdrop-blur-sm">
+                <p class="text-xs opacity-70 font-semibold uppercase tracking-wide">Meta mensal</p>
+                <p class="text-3xl font-black leading-tight mt-0.5">30</p>
+                <p class="text-xs opacity-80 mt-1 font-medium"
+                   x-text="(stats.matriculado??0) >= 30 ? '✅ Batida!' : `faltam ${30-(stats.matriculado??0)}`"></p>
+              </div>
+            </div>
+            <!-- Barra de progresso -->
+            <div class="mt-4">
+              <div class="flex justify-between text-xs opacity-70 mb-1.5 font-medium">
+                <span>Progresso da meta</span>
+                <span x-text="`${Math.min(Math.round(((stats.matriculado??0)/30)*100),100)}%`"></span>
+              </div>
+              <div class="bg-white/20 rounded-full h-3 overflow-hidden">
+                <div class="bg-white rounded-full h-3 bar-anim"
+                     :style="`width: ${Math.min(((stats.matriculado??0)/30)*100,100)}%`"></div>
+              </div>
+            </div>
+          </div>
         </div>
-        <div class="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
-          <p class="text-xs text-slate-400 font-medium">Em contato</p>
-          <p class="text-2xl font-bold text-blue-500 mt-0.5" x-text="stats.em_contato ?? 0"></p>
-        </div>
-        <div class="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
-          <p class="text-xs text-slate-400 font-medium">Agendados</p>
-          <p class="text-2xl font-bold text-amber-500 mt-0.5" x-text="stats.agendado ?? 0"></p>
-          <p class="text-xs text-slate-300 mt-0.5" x-text="`${stats.taxa_agendamento ?? 0}%`"></p>
-        </div>
-        <div class="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
-          <p class="text-xs text-slate-400 font-medium">Matrículas</p>
-          <p class="text-2xl font-bold text-green-600 mt-0.5" x-text="stats.matriculado ?? 0"></p>
-          <p class="text-xs text-slate-300 mt-0.5" x-text="`${stats.taxa_conversao ?? 0}% conversão`"></p>
-        </div>
-        <div class="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
-          <p class="text-xs text-slate-400 font-medium">Não atendeu</p>
-          <p class="text-2xl font-bold text-red-400 mt-0.5" x-text="(stats.nao_atendeu ?? 0) + (stats.nao_compareceu ?? 0)"></p>
+
+        <!-- Funil: 4 cards menores -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+
+          <!-- Sem contato -->
+          <div class="stat-card bg-white rounded-2xl p-4 border border-slate-100 shadow-sm hover:shadow-md">
+            <div class="flex items-center justify-between mb-3">
+              <span class="text-xl leading-none">📋</span>
+              <span class="text-xs font-bold text-orange-500 bg-orange-50 px-2 py-0.5 rounded-full">Novos</span>
+            </div>
+            <p class="text-4xl font-black text-slate-800 leading-none" x-text="stats.novo ?? 0"></p>
+            <p class="text-xs text-slate-400 font-medium mt-1.5">Sem contato</p>
+            <div class="mt-2.5 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+              <div class="h-1.5 bg-orange-400 rounded-full bar-anim"
+                   :style="`width: ${(stats.total??0)>0 ? Math.round(((stats.novo??0)/(stats.total??1))*100) : 0}%`"></div>
+            </div>
+          </div>
+
+          <!-- Em contato -->
+          <div class="stat-card bg-white rounded-2xl p-4 border border-slate-100 shadow-sm hover:shadow-md">
+            <div class="flex items-center justify-between mb-3">
+              <span class="text-xl leading-none">📞</span>
+              <span class="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">Ativos</span>
+            </div>
+            <p class="text-4xl font-black text-blue-600 leading-none" x-text="stats.em_contato ?? 0"></p>
+            <p class="text-xs text-slate-400 font-medium mt-1.5">Em contato</p>
+            <div class="mt-2.5 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+              <div class="h-1.5 bg-blue-400 rounded-full bar-anim"
+                   :style="`width: ${(stats.total??0)>0 ? Math.round(((stats.em_contato??0)/(stats.total??1))*100) : 0}%`"></div>
+            </div>
+          </div>
+
+          <!-- Agendados -->
+          <div class="stat-card bg-white rounded-2xl p-4 border border-slate-100 shadow-sm hover:shadow-md">
+            <div class="flex items-center justify-between mb-3">
+              <span class="text-xl leading-none">📅</span>
+              <span class="text-xs font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full"
+                    x-text="`${stats.taxa_agendamento ?? 0}%`"></span>
+            </div>
+            <p class="text-4xl font-black text-amber-500 leading-none" x-text="stats.agendado ?? 0"></p>
+            <p class="text-xs text-slate-400 font-medium mt-1.5">Agendados</p>
+            <div class="mt-2.5 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+              <div class="h-1.5 bg-amber-400 rounded-full bar-anim"
+                   :style="`width: ${(stats.total??0)>0 ? Math.round(((stats.agendado??0)/(stats.total??1))*100) : 0}%`"></div>
+            </div>
+          </div>
+
+          <!-- Retomar -->
+          <div class="stat-card bg-orange-50 rounded-2xl p-4 border border-orange-100 shadow-sm hover:shadow-md">
+            <div class="flex items-center justify-between mb-3">
+              <span class="text-xl leading-none">🔁</span>
+              <span class="text-xs font-bold text-orange-600 bg-orange-100 px-2 py-0.5 rounded-full">Retomar</span>
+            </div>
+            <p class="text-4xl font-black text-orange-500 leading-none"
+               x-text="(stats.nao_atendeu ?? 0) + (stats.nao_compareceu ?? 0)"></p>
+            <p class="text-xs text-orange-500 font-medium mt-1.5">Não atendeu/compareceu</p>
+            <div class="mt-2.5 h-1.5 bg-orange-200 rounded-full overflow-hidden">
+              <div class="h-1.5 bg-orange-400 rounded-full bar-anim"
+                   :style="`width: ${(stats.total??0)>0 ? Math.round((((stats.nao_atendeu??0)+(stats.nao_compareceu??0))/(stats.total??1))*100) : 0}%`"></div>
+            </div>
+          </div>
+
         </div>
       </div>
 
